@@ -154,7 +154,7 @@ def do_setup(package_data):
         install_requires=[
             "cffi",
             "cython",
-            "dataclasses",
+            #"dataclasses",
             "hydra-core",
             "numpy",
             "regex",
