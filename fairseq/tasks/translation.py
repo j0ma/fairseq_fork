@@ -383,7 +383,12 @@ class TranslationTask(LegacyFairseqTask):
         if self.args.eval_bleu:
 
             def sum_logs(key):
-                return sum(log.get(key, 0) for log in logging_outputs)
+                import torch
+
+                result = sum(log.get(key, 0) for log in logging_outputs)
+                if torch.is_tensor(result):
+                    result = result.cpu()
+                return result
 
             counts, totals = [], []
 
@@ -426,7 +431,6 @@ class TranslationTask(LegacyFairseqTask):
                     )
 
                     return round(bleu.score, 2)
-
 
                 metrics.log_derived("bleu", compute_bleu)
 
