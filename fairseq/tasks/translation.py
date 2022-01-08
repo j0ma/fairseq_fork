@@ -52,6 +52,7 @@ def load_langpair_dataset(
     num_buckets=0,
     shuffle=True,
     pad_to_multiple=1,
+    truncate_target=False,
 ):
     def split_exists(split, src, tgt, lang, data_path):
         filename = os.path.join(data_path, "{}.{}-{}.{}".format(split, src, tgt, lang))
@@ -83,6 +84,7 @@ def load_langpair_dataset(
         )
 
         if truncate_source:
+            print(f"[TranslationTask] Truncating source side to {max_source_positions - 1} positions")
             src_dataset = AppendTokenDataset(
                 TruncateDataset(
                     StripTokenDataset(src_dataset, src_dict.eos()),
@@ -97,6 +99,18 @@ def load_langpair_dataset(
         )
 
         if tgt_dataset is not None:
+
+            if truncate_target:
+                print(f"[TranslationTask] Truncating target side to {max_target_positions - 1} positions")
+                tgt_dataset = AppendTokenDataset(
+                    TruncateDataset(
+                        StripTokenDataset(tgt_dataset, tgt_dict.eos()),
+                        max_target_positions - 1,
+                    ),
+                    tgt_dict.eos(),
+                )
+
+
             tgt_datasets.append(tgt_dataset)
 
         logger.info(
@@ -220,6 +234,8 @@ class TranslationTask(LegacyFairseqTask):
                             help='amount to upsample primary dataset')
         parser.add_argument('--truncate-source', action='store_true', default=False,
                             help='truncate source to max-source-positions')
+        parser.add_argument('--truncate-target', action='store_true', default=False,
+                            help='truncate target to max-target-positions')
         parser.add_argument('--num-batch-buckets', default=0, type=int, metavar='N',
                             help='if >0, then bucket source and target lengths into N '
                                  'buckets and pad accordingly; this is useful on TPUs '
@@ -323,6 +339,7 @@ class TranslationTask(LegacyFairseqTask):
             max_target_positions=self.args.max_target_positions,
             load_alignments=self.args.load_alignments,
             truncate_source=self.args.truncate_source,
+            truncate_target=self.args.truncate_target,
             num_buckets=self.args.num_batch_buckets,
             shuffle=(split != "test"),
             pad_to_multiple=self.args.required_seq_len_multiple,
