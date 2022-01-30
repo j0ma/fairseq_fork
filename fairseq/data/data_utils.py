@@ -346,7 +346,7 @@ def post_process(sentence: str, symbol: str):
         sentence = sentence.replace(" ", "").replace("|", " ").strip()
     elif symbol == "_EOW":
         sentence = sentence.replace(" ", "").replace("_EOW", " ").strip()
-    elif symbol == "characters_mrl_nmt22":
+    elif symbol == "characters_squiggle":
         sentence = sentence.replace(" ", "").replace("﹏", " ")
     elif symbol is not None and symbol != "none":
         sentence = (sentence + " ").replace(symbol, "").rstrip()
