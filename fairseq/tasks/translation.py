@@ -56,7 +56,6 @@ def load_langpair_dataset(
 ):
     def split_exists(split, src, tgt, lang, data_path):
         filename = os.path.join(data_path, "{}.{}-{}.{}".format(split, src, tgt, lang))
-
         return indexed_dataset.dataset_exists(filename, impl=dataset_impl)
 
     src_datasets = []
@@ -66,7 +65,6 @@ def load_langpair_dataset(
         split_k = split + (str(k) if k > 0 else "")
 
         # infer langcode
-
         if split_exists(split_k, src, tgt, src, data_path):
             prefix = os.path.join(data_path, "{}.{}-{}.".format(split_k, src, tgt))
         elif split_exists(split_k, tgt, src, src, data_path):
@@ -82,7 +80,6 @@ def load_langpair_dataset(
         src_dataset = data_utils.load_indexed_dataset(
             prefix + src, src_dict, dataset_impl
         )
-
         if truncate_source:
             print(f"[TranslationTask] Truncating source side to {max_source_positions - 1} positions")
             src_dataset = AppendTokenDataset(
@@ -97,7 +94,6 @@ def load_langpair_dataset(
         tgt_dataset = data_utils.load_indexed_dataset(
             prefix + tgt, tgt_dict, dataset_impl
         )
-
         if tgt_dataset is not None:
 
             if truncate_target:
@@ -131,7 +127,6 @@ def load_langpair_dataset(
         sample_ratios = [1] * len(src_datasets)
         sample_ratios[0] = upsample_primary
         src_dataset = ConcatDataset(src_datasets, sample_ratios)
-
         if len(tgt_datasets) > 0:
             tgt_dataset = ConcatDataset(tgt_datasets, sample_ratios)
         else:
@@ -140,17 +135,14 @@ def load_langpair_dataset(
     if prepend_bos:
         assert hasattr(src_dict, "bos_index") and hasattr(tgt_dict, "bos_index")
         src_dataset = PrependTokenDataset(src_dataset, src_dict.bos())
-
         if tgt_dataset is not None:
             tgt_dataset = PrependTokenDataset(tgt_dataset, tgt_dict.bos())
 
     eos = None
-
     if append_source_id:
         src_dataset = AppendTokenDataset(
             src_dataset, src_dict.index("[{}]".format(src))
         )
-
         if tgt_dataset is not None:
             tgt_dataset = AppendTokenDataset(
                 tgt_dataset, tgt_dict.index("[{}]".format(tgt))
@@ -158,17 +150,14 @@ def load_langpair_dataset(
         eos = tgt_dict.index("[{}]".format(tgt))
 
     align_dataset = None
-
     if load_alignments:
         align_path = os.path.join(data_path, "{}.align.{}-{}".format(split, src, tgt))
-
         if indexed_dataset.dataset_exists(align_path, impl=dataset_impl):
             align_dataset = data_utils.load_indexed_dataset(
                 align_path, None, dataset_impl
             )
 
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
-
     return LanguagePairDataset(
         src_dataset,
         src_dataset.sizes,
@@ -280,12 +269,10 @@ class TranslationTask(LegacyFairseqTask):
         paths = utils.split_paths(args.data)
         assert len(paths) > 0
         # find language pair automatically
-
         if args.source_lang is None or args.target_lang is None:
             args.source_lang, args.target_lang = data_utils.infer_language_pair(
                 paths[0]
             )
-
         if args.source_lang is None or args.target_lang is None:
             raise Exception(
                 "Could not infer language pair, please provide it explicitly"
@@ -314,7 +301,6 @@ class TranslationTask(LegacyFairseqTask):
         """
         paths = utils.split_paths(self.args.data)
         assert len(paths) > 0
-
         if split != getattr(self.args, "train_subset", None):
             # if not training data set, use the first shard for valid and test
             paths = paths[:1]
@@ -356,7 +342,6 @@ class TranslationTask(LegacyFairseqTask):
 
     def build_model(self, args):
         model = super().build_model(args)
-
         if getattr(args, "eval_bleu", False):
             assert getattr(args, "eval_bleu_detok", None) is not None, (
                 "--eval-bleu-detok is required if using --eval-bleu; "
@@ -374,12 +359,10 @@ class TranslationTask(LegacyFairseqTask):
             self.sequence_generator = self.build_generator(
                 [model], Namespace(**gen_args)
             )
-
         return model
 
     def valid_step(self, sample, model, criterion):
         loss, sample_size, logging_output = super().valid_step(sample, model, criterion)
-
         if self.args.eval_bleu:
             bleu = self._inference_with_bleu(self.sequence_generator, sample, model)
             logging_output["_bleu_sys_len"] = bleu.sys_len
@@ -387,28 +370,19 @@ class TranslationTask(LegacyFairseqTask):
             # we split counts into separate entries so that they can be
             # summed efficiently across workers using fast-stat-sync
             assert len(bleu.counts) == EVAL_BLEU_ORDER
-
             for i in range(EVAL_BLEU_ORDER):
                 logging_output["_bleu_counts_" + str(i)] = bleu.counts[i]
                 logging_output["_bleu_totals_" + str(i)] = bleu.totals[i]
-
         return loss, sample_size, logging_output
 
     def reduce_metrics(self, logging_outputs, criterion):
         super().reduce_metrics(logging_outputs, criterion)
-
         if self.args.eval_bleu:
 
             def sum_logs(key):
-                import torch
-
-                result = sum(log.get(key, 0) for log in logging_outputs)
-                if torch.is_tensor(result):
-                    result = result.cpu()
-                return result
+                return sum(log.get(key, 0) for log in logging_outputs)
 
             counts, totals = [], []
-
             for i in range(EVAL_BLEU_ORDER):
                 counts.append(sum_logs("_bleu_counts_" + str(i)))
                 totals.append(sum_logs("_bleu_totals_" + str(i)))
@@ -422,50 +396,36 @@ class TranslationTask(LegacyFairseqTask):
 
                 def compute_bleu(meters):
                     import inspect
+                    import sacrebleu
 
-                    try:
-                        from sacrebleu.metrics import BLEU
-
-                        comp_bleu = BLEU.compute_bleu
-                    except ImportError:
-                        # compatibility API for sacrebleu 1.x
-                        import sacrebleu
-
-                        comp_bleu = sacrebleu.compute_bleu
-
-                    fn_sig = inspect.getfullargspec(comp_bleu)[0]
-
+                    fn_sig = inspect.getfullargspec(sacrebleu.compute_bleu)[0]
                     if "smooth_method" in fn_sig:
                         smooth = {"smooth_method": "exp"}
                     else:
                         smooth = {"smooth": "exp"}
-                    bleu = comp_bleu(
+                    bleu = sacrebleu.compute_bleu(
                         correct=meters["_bleu_counts"].sum,
                         total=meters["_bleu_totals"].sum,
-                        sys_len=int(meters["_bleu_sys_len"].sum),
-                        ref_len=int(meters["_bleu_ref_len"].sum),
-                        **smooth,
+                        sys_len=meters["_bleu_sys_len"].sum,
+                        ref_len=meters["_bleu_ref_len"].sum,
+                        **smooth
                     )
-
                     return round(bleu.score, 2)
 
                 metrics.log_derived("bleu", compute_bleu)
 
     def max_positions(self):
         """Return the max sentence length allowed by the task."""
-
         return (self.args.max_source_positions, self.args.max_target_positions)
 
     @property
     def source_dictionary(self):
         """Return the source :class:`~fairseq.data.Dictionary`."""
-
         return self.src_dict
 
     @property
     def target_dictionary(self):
         """Return the target :class:`~fairseq.data.Dictionary`."""
-
         return self.tgt_dict
 
     def _inference_with_bleu(self, generator, sample, model):
@@ -482,15 +442,12 @@ class TranslationTask(LegacyFairseqTask):
                 # reference, but doesn't get split into multiple tokens.
                 unk_string=("UNKNOWNTOKENINREF" if escape_unk else "UNKNOWNTOKENINHYP"),
             )
-
             if self.tokenizer:
                 s = self.tokenizer.decode(s)
-
             return s
 
         gen_out = self.inference_step(generator, [model], sample, prefix_tokens=None)
         hyps, refs = [], []
-
         for i in range(len(gen_out)):
             hyps.append(decode(gen_out[i][0]["tokens"]))
             refs.append(
@@ -499,11 +456,9 @@ class TranslationTask(LegacyFairseqTask):
                     escape_unk=True,  # don't count <unk> as matches to the hypo
                 )
             )
-
         if self.args.eval_bleu_print_samples:
             logger.info("example hypothesis: " + hyps[0])
             logger.info("example reference: " + refs[0])
-
         if self.args.eval_tokenized_bleu:
             return sacrebleu.corpus_bleu(hyps, [refs], tokenize="none")
         else:
